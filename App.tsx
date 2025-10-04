@@ -1,4 +1,3 @@
-
 import React, { useState, useCallback } from 'react';
 import { Difficulty, QAItem, Source } from './types';
 import { generateQA } from './services/geminiService';
@@ -7,11 +6,10 @@ import QAList from './components/QAList';
 import Loader from './components/Loader';
 import { DownloadIcon } from './components/Icons';
 
-// Access jspdf and html2canvas from the window object
+// Access jspdf from the window object
 declare global {
     interface Window {
         jspdf: any;
-        html2canvas: any;
     }
 }
 
@@ -47,37 +45,85 @@ const App: React.FC = () => {
   }, [topic, difficulty, numQuestions]);
 
   const handleDownloadPDF = useCallback(() => {
-    const qaContainer = document.getElementById('qa-container');
-    if (qaContainer) {
-      const { jsPDF } = window.jspdf;
-      window.html2canvas(qaContainer, { scale: 2 }).then((canvas: HTMLCanvasElement) => {
-        const imgData = canvas.toDataURL('image/png');
-        const pdf = new jsPDF('p', 'mm', 'a4');
-        const pdfWidth = pdf.internal.pageSize.getWidth();
-        const pdfHeight = pdf.internal.pageSize.getHeight();
-        const canvasWidth = canvas.width;
-        const canvasHeight = canvas.height;
-        const ratio = canvasWidth / canvasHeight;
-        const width = pdfWidth - 20;
-        const height = width / ratio;
+    const { jsPDF } = window.jspdf;
+    const doc = new jsPDF({ orientation: 'p', unit: 'mm', format: 'a4' });
 
-        let position = 10;
-        
-        if (height > pdfHeight - 20) {
-            // If content is too tall, it would need multi-page logic
-            // For this app, we'll fit it to one page, which may reduce quality for long lists.
-            const imgHeight = pdfHeight - 20;
-            const imgWidth = imgHeight * ratio;
-            pdf.addImage(imgData, 'PNG', 10, 10, imgWidth, imgHeight);
-        } else {
-            pdf.addImage(imgData, 'PNG', 10, position, width, height);
-        }
-        
-        const filename = `QA_${topic.replace(/\s+/g, '_')}_${difficulty}.pdf`;
-        pdf.save(filename);
+    const margin = 15;
+    const pageWidth = doc.internal.pageSize.getWidth();
+    const usableWidth = pageWidth - 2 * margin;
+    const pageHeight = doc.internal.pageSize.getHeight();
+    let y = margin;
+
+    const checkPageBreak = (neededHeight: number) => {
+      if (y + neededHeight > pageHeight - margin) {
+        doc.addPage();
+        y = margin;
+      }
+    };
+
+    // --- Document Header ---
+    doc.setFont('helvetica', 'bold');
+    doc.setFontSize(20);
+    doc.text(`Q&A on: ${topic}`, pageWidth / 2, y, { align: 'center' });
+    y += 15;
+    
+    doc.setFont('helvetica', 'normal');
+    doc.setFontSize(12);
+    doc.text(`Difficulty: ${difficulty.charAt(0).toUpperCase() + difficulty.slice(1)}`, pageWidth / 2, y, { align: 'center' });
+    y += 15;
+
+
+    // --- Q&A Section ---
+    qaList.forEach((item, index) => {
+      // Question
+      doc.setFont('helvetica', 'bold');
+      doc.setFontSize(14);
+      const questionText = `${index + 1}. ${item.question}`;
+      const questionLines = doc.splitTextToSize(questionText, usableWidth);
+      checkPageBreak(questionLines.length * 6); // Approx height for question
+      doc.text(questionLines, margin, y);
+      y += questionLines.length * 6;
+
+      // Answer
+      y += 4; // Space between Q and A
+      doc.setFont('helvetica', 'normal');
+      doc.setFontSize(12);
+      const answerLines = doc.splitTextToSize(item.answer, usableWidth);
+      checkPageBreak(answerLines.length * 5 + 10); // Approx height for answer + bottom margin
+      doc.text(answerLines, margin, y);
+      y += answerLines.length * 5 + 10;
+    });
+
+    // --- Sources Section ---
+    if (sources.length > 0) {
+      checkPageBreak(20); // Height for header
+      doc.setFont('helvetica', 'bold');
+      doc.setFontSize(16);
+      doc.text('Fact-Checked Sources', margin, y);
+      y += 10;
+
+      sources.forEach((source) => {
+        const sourceTitle = source.title || 'Untitled Source';
+        const titleLines = doc.splitTextToSize(sourceTitle, usableWidth);
+        // Estimate height for title, URL, and spacing
+        const neededHeight = (titleLines.length * 4) + 8;
+        checkPageBreak(neededHeight);
+
+        doc.setFont('helvetica', 'normal');
+        doc.setFontSize(10);
+        doc.text(titleLines, margin, y);
+        y += titleLines.length * 4;
+
+        doc.setTextColor(40, 58, 203); // Set color to blue for link
+        doc.textWithLink(source.uri, margin, y, { url: source.uri });
+        doc.setTextColor(0, 0, 0); // Reset text color to black
+        y += 8;
       });
     }
-  }, [topic, difficulty]);
+    
+    const filename = `QA_${topic.replace(/\s+/g, '_')}_${difficulty}.pdf`;
+    doc.save(filename);
+  }, [topic, difficulty, qaList, sources]);
 
 
   return (
