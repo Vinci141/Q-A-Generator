@@ -1,0 +1,5 @@
+{
+  "name": "Fact-Checked Q&A Generator",
+  "description": "An interactive application that leverages AI to generate fact-checked questions and answers on any topic and difficulty level, with an option to download the results as a PDF.",
+  "requestFramePermissions": []
+}
