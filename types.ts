@@ -13,4 +13,5 @@ export interface QAItem {
 export interface Source {
   uri: string;
   title: string;
+  summary?: string;
 }

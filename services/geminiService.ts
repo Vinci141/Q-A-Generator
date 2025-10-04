@@ -12,10 +12,79 @@ const cleanJsonString = (str: string): string => {
   const startIndex = str.indexOf('[');
   const endIndex = str.lastIndexOf(']');
   if (startIndex === -1 || endIndex === -1) {
-    throw new Error('Could not find a valid JSON array in the response.');
+    // Try finding an object if array fails
+    const objStartIndex = str.indexOf('{');
+    const objEndIndex = str.lastIndexOf('}');
+    if (objStartIndex !== -1 && objEndIndex !== -1) {
+        return `[${str.substring(objStartIndex, objEndIndex + 1)}]`;
+    }
+    throw new Error('Could not find a valid JSON structure in the response.');
   }
   return str.substring(startIndex, endIndex + 1);
 };
+
+const generateSummariesForSources = async (sources: Source[], topic: string): Promise<Source[]> => {
+    if (sources.length === 0) {
+        return sources;
+    }
+
+    const prompt = `
+        You are an expert at summarizing web content for research purposes.
+        Given the main topic "${topic}", provide a concise, one-sentence summary for each of the following web pages.
+        Use your search tool to access and understand the content of each page.
+        Your entire response must be a single, valid JSON array of objects. Do not include any text, markdown, or explanations outside of the JSON structure.
+
+        **CRITICAL INSTRUCTIONS:**
+        1.  The summary MUST be a single, informative sentence.
+        2.  Each object in the array must have two keys: "uri" (string) and "summary" (string).
+        3.  The "uri" in your JSON output must EXACTLY match the URI provided in the list below.
+
+        **Web Pages to Summarize:**
+        ${sources.map(s => s.uri).join('\n')}
+
+        **Example JSON Output:**
+        [
+            {
+                "uri": "https://example.com/page1",
+                "summary": "This is a one-sentence summary for page1."
+            },
+            {
+                "uri": "https://example.com/page2",
+                "summary": "This is a one-sentence summary for page2."
+            }
+        ]
+
+        Now, generate the response.
+    `;
+
+    try {
+        const response: GenerateContentResponse = await ai.models.generateContent({
+            model: 'gemini-2.5-flash',
+            contents: prompt,
+            config: {
+                tools: [{ googleSearch: {} }],
+            },
+        });
+        
+        const rawText = response.text;
+        const jsonString = cleanJsonString(rawText);
+        const summaries: { uri: string; summary: string }[] = JSON.parse(jsonString);
+
+        const summaryMap = new Map(summaries.map(s => [s.uri, s.summary]));
+
+        return sources.map(source => ({
+            ...source,
+            summary: summaryMap.get(source.uri),
+        }));
+
+    } catch (error) {
+        console.warn("Could not generate summaries for sources:", error);
+        // If summarization fails, return the original sources without summaries.
+        // This makes the feature a progressive enhancement.
+        return sources;
+    }
+};
+
 
 export const generateQA = async (
   topic: string,
@@ -83,7 +152,9 @@ export const generateQA = async (
       throw new Error("Generated content is not a valid Q&A list.");
     }
 
-    return { qaList, sources };
+    const sourcesWithSummaries = await generateSummariesForSources(sources, topic);
+
+    return { qaList, sources: sourcesWithSummaries };
   } catch (error) {
     console.error("Error generating Q&A:", error);
     throw new Error(

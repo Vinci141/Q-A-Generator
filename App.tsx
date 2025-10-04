@@ -1,3 +1,4 @@
+
 import React, { useState, useCallback } from 'react';
 import { Difficulty, QAItem, Source } from './types';
 import { generateQA } from './services/geminiService';
@@ -105,18 +106,32 @@ const App: React.FC = () => {
       sources.forEach((source) => {
         const sourceTitle = source.title || 'Untitled Source';
         const titleLines = doc.splitTextToSize(sourceTitle, usableWidth);
-        // Estimate height for title, URL, and spacing
-        const neededHeight = (titleLines.length * 4) + 8;
+        const summaryLines = source.summary ? doc.splitTextToSize(`"${source.summary}"`, usableWidth) : [];
+        
+        // Estimate height for title, URL, summary, and spacing
+        const neededHeight = (titleLines.length * 4) + 4 + (summaryLines.length * 4) + 8;
         checkPageBreak(neededHeight);
 
         doc.setFont('helvetica', 'normal');
         doc.setFontSize(10);
         doc.text(titleLines, margin, y);
-        y += titleLines.length * 4;
+        y += titleLines.length * 4 + 2;
 
         doc.setTextColor(40, 58, 203); // Set color to blue for link
         doc.textWithLink(source.uri, margin, y, { url: source.uri });
         doc.setTextColor(0, 0, 0); // Reset text color to black
+        y += 4;
+
+        if (source.summary) {
+            doc.setFont('helvetica', 'italic');
+            doc.setFontSize(9);
+            doc.setTextColor(80, 80, 80); // Gray color
+            doc.text(summaryLines, margin, y);
+            y += summaryLines.length * 4;
+            doc.setFont('helvetica', 'normal');
+            doc.setTextColor(0, 0, 0);
+        }
+
         y += 8;
       });
     }

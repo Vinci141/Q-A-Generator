@@ -54,13 +54,20 @@ const QAList: React.FC<QAListProps> = ({ qaList, sources }) => {
       {sources.length > 0 && (
         <div className="mt-8 pt-6 border-t border-gray-200">
             <h3 className="text-lg font-semibold text-gray-800 mb-3">Fact-Checked Sources</h3>
-            <ul className="space-y-2">
+            <ul className="space-y-3">
                 {sources.map((source, index) => (
                     <li key={index} className="flex items-start">
-                        <span className="text-primary mr-2">&#10003;</span>
-                        <a href={source.uri} target="_blank" rel="noopener noreferrer" className="text-sm text-blue-600 hover:underline hover:text-blue-800 break-all">
-                            {source.title || source.uri}
-                        </a>
+                        <span className="text-primary mr-3 mt-1">&#10003;</span>
+                        <div className="flex-1">
+                            <a href={source.uri} target="_blank" rel="noopener noreferrer" className="text-sm text-blue-600 hover:underline hover:text-blue-800 break-all">
+                                {source.title || source.uri}
+                            </a>
+                            {source.summary && (
+                                <p className="mt-1 text-sm text-gray-600 italic">
+                                    "{source.summary}"
+                                </p>
+                            )}
+                        </div>
                     </li>
                 ))}
             </ul>
